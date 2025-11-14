@@ -145,6 +145,13 @@ git clone https://github.com/Max-imalgutaussehend/portfolio-optimization
 cd portfolio-optimization
 pip install -r requirements.txt
 
+## Run this app
+*Backend*
+uvicorn src.api.main:app --reload
+
+*Frontend*
+npm run dev
+
 
 ---
 
