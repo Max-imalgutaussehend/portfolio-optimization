@@ -1,340 +1,486 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { TrendingUp, PieChart, Shield, Sparkles, ArrowRight, Zap, Activity } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { TrendingUp, BarChart2, Shield, Zap, ArrowRight, Activity } from "lucide-react";
+import LiquidEther from "../components/liquidEther";
 
-interface Price {
+interface PerformanceData {
   date: string;
-  price: number;
-}
-
-interface Weight {
-  symbol: string;
-  weight: number;
-}
-
-interface Risk {
-  symbol: string;
+  totalReturn: number;
   volatility: number;
+  sharpe: number;
 }
 
-interface Optimization {
+interface AllocationData {
   symbol: string;
   weight: number;
+  sector: string;
 }
 
-export default function PortfolioDashboard() {
+interface RiskData {
+  symbol: string;
+  riskContribution: number;
+  beta: number;
+}
+
+interface OptimizationData {
+  symbol: string;
+  currentWeight: number;
+  optimizedWeight: number;
+}
+
+
+
+export default function PortfolioOptimization() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [activeTab, setActiveTab] = useState("performance");
-  const [prices, setPrices] = useState<Price[]>([]);
-  const [weights, setWeights] = useState<Weight[]>([]);
-  const [risk, setRisk] = useState<Risk[]>([]);
-  const [optimization, setOptimization] = useState<Optimization[]>([]);
   const [loading, setLoading] = useState(false);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePos({ x: e.clientX, y: e.clientY });
-    };
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
+  // Data states
+  const [performance, setPerformance] = useState<PerformanceData[]>([]);
+  const [allocation, setAllocation] = useState<AllocationData[]>([]);
+  const [risk, setRisk] = useState<RiskData[]>([]);
+  const [optimization, setOptimization] = useState<OptimizationData[]>([]);
 
   useEffect(() => {
     if (!showWelcome) {
       setLoading(true);
       setTimeout(() => {
-        setPrices([
-          { date: "Jan", price: 10000 },
-          { date: "Feb", price: 10500 },
-          { date: "Mar", price: 11200 },
-          { date: "Apr", price: 10800 },
-          { date: "May", price: 12000 }
+        setPerformance([
+          { date: "Jan", totalReturn: 5.2, volatility: 12.3, sharpe: 1.2 },
+          { date: "Feb", totalReturn: 7.8, volatility: 13.1, sharpe: 1.4 },
+          { date: "Mar", totalReturn: 12.4, volatility: 11.8, sharpe: 1.6 },
+          { date: "Apr", totalReturn: 10.1, volatility: 14.2, sharpe: 1.3 },
+          { date: "May", totalReturn: 15.6, volatility: 12.9, sharpe: 1.7 }
         ]);
-        setWeights([
-          { symbol: "AAPL", weight: 25 },
-          { symbol: "GOOGL", weight: 20 },
-          { symbol: "MSFT", weight: 30 },
-          { symbol: "AMZN", weight: 15 },
-          { symbol: "TSLA", weight: 10 }
+        setAllocation([
+          { symbol: "AAPL", weight: 25, sector: "Technology" },
+          { symbol: "GOOGL", weight: 20, sector: "Technology" },
+          { symbol: "MSFT", weight: 30, sector: "Technology" },
+          { symbol: "JPM", weight: 15, sector: "Finance" },
+          { symbol: "JNJ", weight: 10, sector: "Healthcare" }
         ]);
         setRisk([
-          { symbol: "AAPL", volatility: 15 },
-          { symbol: "GOOGL", volatility: 18 },
-          { symbol: "MSFT", volatility: 12 },
-          { symbol: "AMZN", volatility: 22 },
-          { symbol: "TSLA", volatility: 35 }
+          { symbol: "AAPL", riskContribution: 22, beta: 1.15 },
+          { symbol: "GOOGL", riskContribution: 18, beta: 1.08 },
+          { symbol: "MSFT", riskContribution: 28, beta: 0.95 },
+          { symbol: "JPM", riskContribution: 20, beta: 1.22 },
+          { symbol: "JNJ", riskContribution: 12, beta: 0.78 }
         ]);
         setOptimization([
-          { symbol: "AAPL", weight: 28 },
-          { symbol: "GOOGL", weight: 22 },
-          { symbol: "MSFT", weight: 32 },
-          { symbol: "AMZN", weight: 12 },
-          { symbol: "TSLA", weight: 6 }
+          { symbol: "AAPL", currentWeight: 25, optimizedWeight: 22 },
+          { symbol: "GOOGL", currentWeight: 20, optimizedWeight: 18 },
+          { symbol: "MSFT", currentWeight: 30, optimizedWeight: 35 },
+          { symbol: "JPM", currentWeight: 15, optimizedWeight: 15 },
+          { symbol: "JNJ", currentWeight: 10, optimizedWeight: 10 }
         ]);
         setLoading(false);
-      }, 1000);
+      }, 800);
     }
   }, [showWelcome]);
 
-  const LineChart = ({ data }: { data: Price[] }) => {
-    if (!data || data.length === 0) {
-      return <div className="flex items-center justify-center h-full text-gray-500">Keine Daten verfügbar</div>;
-    }
+  const PerformanceView = () => {
+    const latestData = performance[performance.length - 1] || { totalReturn: 0, volatility: 0, sharpe: 0 };
     
-    const max = Math.max(...data.map(d => d.price));
-    const min = Math.min(...data.map(d => d.price));
-    const range = max - min || 1;
-
     return (
-      <div className="w-full h-full flex flex-col p-6">
-        <div className="flex-1 relative pb-8">
-          <svg className="w-full h-full" viewBox="0 0 800 300" preserveAspectRatio="xMidYMid meet">
-            <defs>
-              <linearGradient id="lineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(96,165,250,0.3)" />
-                <stop offset="100%" stopColor="rgba(96,165,250,0)" />
-              </linearGradient>
-              <filter id="glow">
-                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-                <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-              </filter>
-            </defs>
-            
-            {/* Grid lines */}
-            {[0, 1, 2, 3].map(i => (
-              <line
-                key={i}
-                x1="40"
-                y1={i * 75}
-                x2="760"
-                y2={i * 75}
-                stroke="rgba(255,255,255,0.05)"
-                strokeWidth="1"
+      <div className="space-y-6">
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl p-6">
+            <div className="text-xs text-zinc-500 mb-2 font-medium uppercase tracking-wider">Total Return</div>
+            <div className="text-3xl font-bold text-emerald-400">+{latestData.totalReturn}%</div>
+            <div className="text-xs text-emerald-500 mt-2">↑ Cumulative gain</div>
+          </div>
+          <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl p-6">
+            <div className="text-xs text-zinc-500 mb-2 font-medium uppercase tracking-wider">Volatility (20d)</div>
+            <div className="text-3xl font-bold text-orange-400">{latestData.volatility}%</div>
+            <div className="text-xs text-zinc-500 mt-2">Rolling volatility</div>
+          </div>
+          <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl p-6">
+            <div className="text-xs text-zinc-500 mb-2 font-medium uppercase tracking-wider">Sharpe Ratio</div>
+            <div className="text-3xl font-bold text-blue-400">{latestData.sharpe}</div>
+            <div className="text-xs text-blue-500 mt-2">Risk-adjusted return</div>
+          </div>
+        </div>
+
+        <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl p-8">
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-white mb-1">Cumulative Return</h3>
+            <p className="text-sm text-zinc-400">Portfolio value over time</p>
+          </div>
+          <div className="h-64">
+            <svg className="w-full h-full" viewBox="0 0 800 240" preserveAspectRatio="xMidYMid meet">
+              <defs>
+                <linearGradient id="returnGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="rgba(16,185,129,0.3)" />
+                  <stop offset="100%" stopColor="rgba(16,185,129,0)" />
+                </linearGradient>
+              </defs>
+              
+              {[0, 1, 2, 3].map(i => (
+                <line key={i} x1="40" y1={i * 60} x2="760" y2={i * 60} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+              ))}
+
+              <path
+                d={`M 40 ${240 - (performance[0]?.totalReturn || 0) * 10} ${performance
+                  .map((d, i) => `L ${40 + (i / (performance.length - 1)) * 720} ${240 - d.totalReturn * 10}`)
+                  .join(" ")} L 760 240 L 40 240 Z`}
+                fill="url(#returnGradient)"
               />
-            ))}
 
-            {/* Area under line */}
-            <path
-              d={`M 40 ${300 - ((data[0].price - min) / range) * 260} ${data
-                .map((d, i) => `L ${40 + (i / (data.length - 1)) * 720} ${300 - ((d.price - min) / range) * 260}`)
-                .join(" ")} L 760 300 L 40 300 Z`}
-              fill="url(#lineGradient)"
-            />
+              <path
+                d={`M 40 ${240 - (performance[0]?.totalReturn || 0) * 10} ${performance
+                  .map((d, i) => `L ${40 + (i / (performance.length - 1)) * 720} ${240 - d.totalReturn * 10}`)
+                  .join(" ")}`}
+                fill="none"
+                stroke="#10b981"
+                strokeWidth="3"
+              />
 
-            {/* Line with glow */}
-            <path
-              d={`M 40 ${300 - ((data[0].price - min) / range) * 260} ${data
-                .map((d, i) => `L ${40 + (i / (data.length - 1)) * 720} ${300 - ((d.price - min) / range) * 260}`)
-                .join(" ")}`}
-              fill="none"
-              stroke="#60a5fa"
-              strokeWidth="3"
-              filter="url(#glow)"
-            />
-
-            {/* Points */}
-            {data.map((d, i) => (
-              <g key={i}>
-                <circle
-                  cx={40 + (i / (data.length - 1)) * 720}
-                  cy={300 - ((d.price - min) / range) * 260}
-                  r="6"
-                  fill="#1e293b"
-                  stroke="#60a5fa"
-                  strokeWidth="2"
-                  className="hover:r-8 transition-all cursor-pointer"
-                />
-              </g>
-            ))}
-
-            {/* X-axis labels */}
-            {data.map((d, i) => (
-              <text
-                key={i}
-                x={40 + (i / (data.length - 1)) * 720}
-                y="290"
-                textAnchor="middle"
-                fill="#64748b"
-                fontSize="11"
-                fontWeight="500"
-              >
-                {d.date}
-              </text>
-            ))}
-          </svg>
+              {performance.map((d, i) => (
+                <g key={i}>
+                  <circle cx={40 + (i / (performance.length - 1)) * 720} cy={240 - d.totalReturn * 10} r="5" fill="#18181b" stroke="#10b981" strokeWidth="2.5" />
+                  <text x={40 + (i / (performance.length - 1)) * 720} y="235" textAnchor="middle" fill="#71717a" fontSize="12" fontWeight="500">{d.date}</text>
+                </g>
+              ))}
+            </svg>
+          </div>
         </div>
-      </div>
-    );
-  };
 
-  const BarChart = ({ data, colors }: { data: { symbol: string; value: number }[]; colors: string[] }) => {
-    if (!data || data.length === 0) {
-      return <div className="flex items-center justify-center h-full text-gray-500">Keine Daten verfügbar</div>;
-    }
-    
-    const max = Math.max(...data.map(d => d.value)) || 1;
-
-    return (
-      <div className="w-full h-full flex flex-col p-6">
-        <div className="flex-1 flex items-end justify-around gap-6 pb-8">
-          {data.map((d, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center gap-3 max-w-24">
-              <div className="text-xs font-semibold text-blue-400">{d.value}%</div>
-              <div
-                className="w-full rounded-t-2xl transition-all duration-500 hover:scale-105 cursor-pointer relative group shadow-lg"
-                style={{
-                  height: `${(d.value / max) * 85}%`,
-                  background: `linear-gradient(180deg, ${colors[i % colors.length]}, ${colors[i % colors.length]}99)`,
-                  minHeight: "30px",
-                  boxShadow: `0 0 20px ${colors[i % colors.length]}40`
-                }}
-              >
-                <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-slate-800/95 backdrop-blur-xl px-3 py-2 rounded-xl text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-2xl border border-white/10">
-                  <div className="font-semibold text-white">{d.symbol}</div>
-                  <div className="text-blue-400">{d.value}%</div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl p-6">
+            <h3 className="text-sm font-semibold text-white mb-4">Rolling Volatility</h3>
+            <div className="space-y-3">
+              {performance.map((d, i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <span className="text-sm text-zinc-400">{d.date}</span>
+                  <div className="flex items-center gap-3">
+                    <div className="w-32 h-2 bg-zinc-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-orange-500 to-orange-400 rounded-full" style={{ width: `${(d.volatility / 20) * 100}%` }} />
+                    </div>
+                    <span className="text-sm font-medium text-white w-12 text-right">{d.volatility}%</span>
+                  </div>
                 </div>
-              </div>
-              <div className="text-xs text-slate-400 font-semibold">{d.symbol}</div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
+          </div>
 
-  if (showWelcome) {
-    return (
-      <div className="min-h-screen bg-slate-950 relative overflow-hidden">
-        {/* Animated background gradient */}
-        <div 
-          className="absolute inset-0 opacity-30"
-          style={{
-            background: `radial-gradient(600px circle at ${mousePos.x}px ${mousePos.y}px, rgba(59, 130, 246, 0.15), transparent 40%)`
-          }}
-        />
-        
-        {/* Grid pattern */}
-        <div className="absolute inset-0" style={{
-          backgroundImage: `linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)`,
-          backgroundSize: '50px 50px'
-        }} />
-
-        <div className="relative min-h-screen flex items-center justify-center p-8">
-          <div className="max-w-5xl w-full">
-            <div className="text-center space-y-12">
-              <div className="inline-block relative">
-                <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full" />
-                <div className="relative w-24 h-24 bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-2xl rounded-3xl mx-auto mb-8 flex items-center justify-center shadow-2xl border border-white/10">
-                  <TrendingUp className="w-12 h-12 text-blue-400" strokeWidth={2} />
-                </div>
-              </div>
-              
-              <div>
-                <h1 className="text-8xl font-extralight tracking-tight text-white mb-4">
-                  Portfolio<span className="text-blue-400">.</span>
-                </h1>
-                <div className="flex items-center justify-center gap-2 text-sm text-slate-400">
-                  <Activity className="w-4 h-4" />
-                  <span className="font-light">Analytics Platform</span>
-                </div>
-              </div>
-              
-              <p className="text-xl text-slate-400 max-w-2xl mx-auto font-light leading-relaxed">
-                Echtzeit-Datenvisualisierung mit modernster Technologie für präzise Investitionsentscheidungen
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-16 mb-12 max-w-4xl mx-auto">
-                <div className="group bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-2xl rounded-3xl p-8 border border-white/10 hover:border-blue-500/50 transition-all shadow-2xl hover:shadow-blue-500/10">
-                  <div className="bg-blue-500/10 w-12 h-12 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-blue-500/20 transition-all">
-                    <TrendingUp className="w-6 h-6 text-blue-400" strokeWidth={2} />
+          <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl p-6">
+            <h3 className="text-sm font-semibold text-white mb-4">Sharpe Ratio Trend</h3>
+            <div className="space-y-3">
+              {performance.map((d, i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <span className="text-sm text-zinc-400">{d.date}</span>
+                  <div className="flex items-center gap-3">
+                    <div className="w-32 h-2 bg-zinc-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full" style={{ width: `${(d.sharpe / 2) * 100}%` }} />
+                    </div>
+                    <span className="text-sm font-medium text-white w-12 text-right">{d.sharpe}</span>
                   </div>
-                  <h3 className="text-lg font-medium text-white mb-2">Performance</h3>
-                  <p className="text-sm text-slate-400 font-light">Live Portfolio-Tracking mit Echtzeit-Updates</p>
                 </div>
-                
-                <div className="group bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-2xl rounded-3xl p-8 border border-white/10 hover:border-blue-500/50 transition-all shadow-2xl hover:shadow-blue-500/10">
-                  <div className="bg-blue-500/10 w-12 h-12 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-blue-500/20 transition-all">
-                    <Zap className="w-6 h-6 text-blue-400" strokeWidth={2} />
-                  </div>
-                  <h3 className="text-lg font-medium text-white mb-2">AI-Powered</h3>
-                  <p className="text-sm text-slate-400 font-light">Intelligente Optimierungsvorschläge</p>
-                </div>
-                
-                <div className="group bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-2xl rounded-3xl p-8 border border-white/10 hover:border-blue-500/50 transition-all shadow-2xl hover:shadow-blue-500/10">
-                  <div className="bg-blue-500/10 w-12 h-12 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-blue-500/20 transition-all">
-                    <Shield className="w-6 h-6 text-blue-400" strokeWidth={2} />
-                  </div>
-                  <h3 className="text-lg font-medium text-white mb-2">Risk Control</h3>
-                  <p className="text-sm text-slate-400 font-light">Volatilitätsanalyse in Echtzeit</p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setShowWelcome(false)}
-                className="group inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-600 rounded-2xl text-white font-medium text-base shadow-2xl shadow-blue-500/50 hover:shadow-blue-500/70 hover:scale-105 transition-all duration-300"
-              >
-                Dashboard starten
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" strokeWidth={2.5} />
-              </button>
+              ))}
             </div>
           </div>
         </div>
       </div>
     );
-  }
+  };
+
+  const AllocationView = () => {
+    const sectorData = allocation.reduce((acc, item) => {
+      acc[item.sector] = (acc[item.sector] || 0) + item.weight;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 gap-6">
+          <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl p-8">
+            <h3 className="text-lg font-semibold text-white mb-6">Current Weights</h3>
+            <div className="space-y-5">
+              {allocation.map((item, i) => {
+                const colors = ["#8b5cf6", "#ec4899", "#f97316", "#eab308", "#10b981"];
+                return (
+                  <div key={i}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold text-white" style={{ backgroundColor: colors[i] + '30', border: `2px solid ${colors[i]}` }}>
+                          {item.symbol.slice(0, 2)}
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-white">{item.symbol}</div>
+                          <div className="text-xs text-zinc-500">{item.sector}</div>
+                        </div>
+                      </div>
+                      <div className="text-lg font-bold text-white">{item.weight}%</div>
+                    </div>
+                    <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-700" style={{ width: `${item.weight}%`, backgroundColor: colors[i] }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl p-8">
+            <h3 className="text-lg font-semibold text-white mb-6">Sector Allocation</h3>
+            <div className="space-y-5">
+              {Object.entries(sectorData).map(([sector, weight], i) => {
+                const colors = ["#3b82f6", "#8b5cf6", "#ec4899"];
+                return (
+                  <div key={i}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-zinc-300">{sector}</span>
+                      <span className="text-lg font-bold text-white">{weight}%</span>
+                    </div>
+                    <div className="h-3 bg-zinc-800 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${weight}%`, backgroundColor: colors[i] }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const RiskView = () => {
+    return (
+      <div className="space-y-6">
+        <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl p-8">
+          <h3 className="text-lg font-semibold text-white mb-6">Risk Contribution per Asset</h3>
+          <div className="space-y-5">
+            {risk.map((item, i) => {
+              const riskLevel = item.riskContribution > 25 ? 'high' : item.riskContribution > 15 ? 'medium' : 'low';
+              const color = riskLevel === 'high' ? '#ef4444' : riskLevel === 'medium' ? '#f59e0b' : '#10b981';
+              
+              return (
+                <div key={i}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-zinc-800 rounded-lg flex items-center justify-center border border-white/10">
+                        <span className="text-sm font-bold text-white">{item.symbol}</span>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-white">{item.symbol}</div>
+                        <div className="text-xs text-zinc-500 capitalize">{riskLevel} risk</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-white">{item.riskContribution}%</div>
+                      <div className="text-xs text-zinc-500">contribution</div>
+                    </div>
+                  </div>
+                  <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-700" style={{ width: `${item.riskContribution}%`, backgroundColor: color }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl p-8">
+          <h3 className="text-lg font-semibold text-white mb-6">Beta vs. Benchmark</h3>
+          <div className="space-y-3">
+            {risk.map((item, i) => (
+              <div key={i} className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg border border-white/5">
+                <span className="text-sm font-medium text-white">{item.symbol}</span>
+                <div className="flex items-center gap-4">
+                  <span className={`text-sm font-bold ${item.beta > 1 ? 'text-red-400' : 'text-green-400'}`}>
+                    β = {item.beta.toFixed(2)}
+                  </span>
+                  <span className="text-xs text-zinc-500">{item.beta > 1 ? 'More volatile' : 'Less volatile'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const OptimizationView = () => {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl p-6">
+            <div className="text-xs text-zinc-500 mb-2 font-medium uppercase tracking-wider">Expected Improvement</div>
+            <div className="text-3xl font-bold text-emerald-400">+2.3%</div>
+            <div className="text-xs text-zinc-500 mt-2">Projected Sharpe increase</div>
+          </div>
+          <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl p-6">
+            <div className="text-xs text-zinc-500 mb-2 font-medium uppercase tracking-wider">Risk Reduction</div>
+            <div className="text-3xl font-bold text-blue-400">-1.8%</div>
+            <div className="text-xs text-zinc-500 mt-2">Volatility decrease</div>
+          </div>
+        </div>
+
+        <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl p-8">
+          <h3 className="text-lg font-semibold text-white mb-2">Weight Allocation: Current vs. Optimized</h3>
+          <p className="text-sm text-zinc-400 mb-6">Maximum Sharpe Ratio optimization</p>
+          <div className="space-y-6">
+            {optimization.map((item, i) => {
+              const diff = item.optimizedWeight - item.currentWeight;
+              return (
+                <div key={i}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-zinc-800 rounded-lg flex items-center justify-center border border-white/10">
+                        <span className="text-sm font-bold text-white">{item.symbol}</span>
+                      </div>
+                      <div className="text-sm font-medium text-white">{item.symbol}</div>
+                    </div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <div className="text-xs text-zinc-500">Current</div>
+                        <div className="text-sm font-bold text-zinc-400">{item.currentWeight}%</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-zinc-500">Optimized</div>
+                        <div className="text-sm font-bold text-emerald-400">{item.optimizedWeight}%</div>
+                      </div>
+                      <div className={`text-sm font-bold w-16 text-right ${diff > 0 ? 'text-emerald-400' : diff < 0 ? 'text-red-400' : 'text-zinc-500'}`}>
+                        {diff > 0 ? '+' : ''}{diff}%
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <div className="text-xs text-zinc-600 mb-1">Current</div>
+                      <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-zinc-600 rounded-full" style={{ width: `${item.currentWeight}%` }} />
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-xs text-zinc-600 mb-1">Optimized</div>
+                      <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${item.optimizedWeight}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+if (showWelcome) {
+  return (
+    <div className="relative min-h-screen bg-zinc-950 overflow-hidden">
+      {/* Ether Background */}
+      <div className="absolute inset-0 z-0">
+        <LiquidEther
+          className="w-full h-full"
+          colors={['#5227FF', '#FF9FFC', '#B19EEF']}
+        />
+      </div>
+
+      {/* Content über dem Ether */}
+      <div className="relative z-10 flex flex-col min-h-screen items-center justify-center p-8">
+        <div className="max-w-5xl w-full text-center space-y-12">
+          <div className="inline-flex items-center gap-3 px-5 py-2 bg-white/5 backdrop-blur-xl border border-white/10 rounded-full">
+            <Activity className="w-4 h-4 text-purple-400" />
+            <span className="text-xs font-medium text-zinc-300 uppercase tracking-wide">
+              Quantitative Portfolio Analysis
+            </span>
+          </div>
+
+          <div>
+            <h1 className="text-8xl font-bold text-white mb-6 tracking-tight">
+              Portfolio Optimization
+            </h1>
+            <p className="text-xl text-zinc-400 max-w-2xl mx-auto">
+              Advanced quantitative analysis with real-time optimization algorithms
+            </p>
+          </div>
+
+          <div className="grid grid-cols-4 gap-4 max-w-5xl mx-auto">
+            {/* Tab Cards */}
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 text-center hover:bg-white/10 transition-all">
+              <div className="w-14 h-14 bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <TrendingUp className="w-7 h-7 text-emerald-400" strokeWidth={2} />
+              </div>
+              <div className="text-2xl font-bold text-white mb-2">Performance</div>
+              <div className="text-xs text-zinc-500">Cumulative returns & metrics</div>
+            </div>
+
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 text-center hover:bg-white/10 transition-all">
+              <div className="w-14 h-14 bg-gradient-to-br from-purple-500/20 to-purple-500/5 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <BarChart2 className="w-7 h-7 text-purple-400" strokeWidth={2} />
+              </div>
+              <div className="text-2xl font-bold text-white mb-2">Allocation</div>
+              <div className="text-xs text-zinc-500">Asset & sector distribution</div>
+            </div>
+
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 text-center hover:bg-white/10 transition-all">
+              <div className="w-14 h-14 bg-gradient-to-br from-orange-500/20 to-orange-500/5 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Shield className="w-7 h-7 text-orange-400" strokeWidth={2} />
+              </div>
+              <div className="text-2xl font-bold text-white mb-2">Risk</div>
+              <div className="text-xs text-zinc-500">Volatility & correlation</div>
+            </div>
+
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 text-center hover:bg-white/10 transition-all">
+              <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-blue-500/5 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Zap className="w-7 h-7 text-blue-400" strokeWidth={2} />
+              </div>
+              <div className="text-2xl font-bold text-white mb-2">Optimize</div>
+              <div className="text-xs text-zinc-500">Maximum Sharpe ratio</div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setShowWelcome(false)}
+            className="group inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-semibold rounded-xl transition-all shadow-2xl shadow-purple-600/30 hover:shadow-purple-600/50 hover:scale-105"
+          >
+            Launch Dashboard
+            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
   return (
-    <div className="min-h-screen bg-slate-950 relative">
-      {/* Animated background */}
-      <div 
-        className="fixed inset-0 opacity-20 pointer-events-none"
-        style={{
-          background: `radial-gradient(600px circle at ${mousePos.x}px ${mousePos.y}px, rgba(59, 130, 246, 0.15), transparent 40%)`
-        }}
-      />
-      
-      {/* Grid pattern */}
-      <div className="fixed inset-0 pointer-events-none" style={{
-        backgroundImage: `linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px)`,
-        backgroundSize: '50px 50px'
-      }} />
-
-      <div className="relative max-w-7xl mx-auto px-8 py-10">
-        <div className="mb-12">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-14 h-14 bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-2xl rounded-2xl flex items-center justify-center border border-white/10 shadow-xl">
-              <TrendingUp className="w-7 h-7 text-blue-400" strokeWidth={2.5} />
-            </div>
-            <div>
-              <h1 className="text-5xl font-extralight tracking-tight text-white">
-                Dashboard
-              </h1>
-              <p className="text-slate-400 mt-2 font-light text-sm flex items-center gap-2">
-                <Activity className="w-3 h-3" />
-                Live Analytics • {new Date().toLocaleDateString('de-DE')}
-              </p>
+    <div className="min-h-screen bg-zinc-950">
+      <div className="border-b border-white/10 bg-zinc-900/50 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                <TrendingUp className="w-6 h-6 text-white" strokeWidth={2.5} />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white">Portfolio Optimization</h1>
+                <p className="text-xs text-zinc-400">Quantitative analysis dashboard</p>
+              </div>
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="flex flex-wrap gap-3 mb-8">
+      <div className="max-w-7xl mx-auto px-8 py-8">
+        <div className="flex gap-2 mb-8 p-1 bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl w-fit">
           {[
             { id: "performance", label: "Performance", icon: TrendingUp },
-            { id: "allocation", label: "Allocation", icon: PieChart },
-            { id: "risk", label: "Risk", icon: Shield },
-            { id: "optimization", label: "Optimize", icon: Sparkles }
+            { id: "allocation", label: "Allocation", icon: BarChart2 },
+            { id: "risk", label: "Risk Analysis", icon: Shield },
+            { id: "optimization", label: "Optimization", icon: Zap }
           ].map(tab => (
             <button
               key={tab.id}
-              className={`group flex items-center gap-2.5 px-6 py-3 rounded-xl font-medium text-sm transition-all duration-300 ${
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium text-sm transition-all ${
                 activeTab === tab.id
-                  ? "bg-blue-600 text-white shadow-xl shadow-blue-600/50"
-                  : "bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-2xl border border-white/10 text-slate-300 hover:border-blue-500/50 hover:text-white"
+                  ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-600/30"
+                  : "text-zinc-400 hover:text-white hover:bg-white/5"
               }`}
               onClick={() => setActiveTab(tab.id)}
             >
@@ -345,74 +491,18 @@ export default function PortfolioDashboard() {
         </div>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center h-96 gap-4">
-            <div className="relative">
-              <div className="animate-spin rounded-full h-16 w-16 border-2 border-blue-500 border-t-transparent"></div>
-              <div className="absolute inset-0 blur-xl bg-blue-500/30 rounded-full"></div>
-            </div>
-            <p className="text-slate-400 text-sm font-light">Lade Daten...</p>
+          <div className="flex flex-col items-center justify-center h-96 bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-2xl">
+            <div className="w-12 h-12 border-4 border-zinc-800 border-t-purple-500 rounded-full animate-spin mb-4" />
+            <p className="text-zinc-400 text-sm">Loading portfolio data...</p>
           </div>
         ) : (
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
-            <div className="h-96">
-              {activeTab === "performance" && <LineChart data={prices} />}
-              {activeTab === "allocation" && (
-                <BarChart
-                  data={weights.map(w => ({ symbol: w.symbol, value: w.weight }))}
-                  colors={["#60a5fa", "#818cf8", "#a78bfa", "#c084fc", "#e879f9"]}
-                />
-              )}
-              {activeTab === "risk" && (
-                <BarChart
-                  data={risk.map(r => ({ symbol: r.symbol, value: r.volatility }))}
-                  colors={["#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16"]}
-                />
-              )}
-              {activeTab === "optimization" && (
-                <BarChart
-                  data={optimization.map(o => ({ symbol: o.symbol, value: o.weight }))}
-                  colors={["#10b981", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6"]}
-                />
-              )}
-            </div>
+          <div>
+            {activeTab === "performance" && <PerformanceView />}
+            {activeTab === "allocation" && <AllocationView />}
+            {activeTab === "risk" && <RiskView />}
+            {activeTab === "optimization" && <OptimizationView />}
           </div>
         )}
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-2xl rounded-2xl p-6 border border-white/10 shadow-xl hover:border-blue-500/30 transition-all group">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Total Value</div>
-              <TrendingUp className="w-4 h-4 text-blue-400 opacity-50 group-hover:opacity-100 transition-opacity" />
-            </div>
-            <div className="text-4xl font-extralight text-white">
-              €{prices.length > 0 ? prices[prices.length - 1].price.toLocaleString() : "0"}
-            </div>
-            <div className="text-xs text-green-400 mt-2 flex items-center gap-1">
-              <span>+8.2%</span>
-              <span className="text-slate-500">vs. letzte Woche</span>
-            </div>
-          </div>
-          
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-2xl rounded-2xl p-6 border border-white/10 shadow-xl hover:border-blue-500/30 transition-all group">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Assets</div>
-              <PieChart className="w-4 h-4 text-blue-400 opacity-50 group-hover:opacity-100 transition-opacity" />
-            </div>
-            <div className="text-4xl font-extralight text-white">{weights.length}</div>
-            <div className="text-xs text-slate-500 mt-2">Diversifiziert</div>
-          </div>
-          
-          <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-2xl rounded-2xl p-6 border border-white/10 shadow-xl hover:border-blue-500/30 transition-all group">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Avg. Volatility</div>
-              <Activity className="w-4 h-4 text-blue-400 opacity-50 group-hover:opacity-100 transition-opacity" />
-            </div>
-            <div className="text-4xl font-extralight text-white">
-              {risk.length > 0 ? (risk.reduce((a, b) => a + b.volatility, 0) / risk.length).toFixed(1) : "0"}%
-            </div>
-            <div className="text-xs text-yellow-400 mt-2">Moderates Risiko</div>
-          </div>
-        </div>
       </div>
     </div>
   );
